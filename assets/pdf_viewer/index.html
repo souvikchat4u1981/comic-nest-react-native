@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>PDF Viewer</title>
+    <style>
+        body { margin: 0; background-color: #333; overflow: hidden; }
+        #pdf-viewer { width: 100vw; height: calc(100vh - 50px); overflow: auto; }
+        canvas { display: block; margin: 0 auto; }
+        #navigation { position: fixed; bottom: 0; left: 0; width: 100%; height: 50px; background-color: #222; display: flex; justify-content: center; align-items: center; }
+        button { padding: 10px 20px; background-color: #444; color: white; border: none; margin: 0 10px; font-size: 16px; }
+        #page-num { color: white; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div id="pdf-viewer"></div>
+    <div id="navigation">
+        <button id="prev">Prev</button>
+        <span id="page-num"></span>
+        <button id="next">Next</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+        
+        const log = (message) => {
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'LOG', payload: message }));
+            }
+        };
+
+        log('HTML Page Loaded.');
+
+        const viewer = document.getElementById('pdf-viewer');
+        const pageNumSpan = document.getElementById('page-num');
+        const prevButton = document.getElementById('prev');
+        const nextButton = document.getElementById('next');
+
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        const scale = 1.5;
+
+        // Helper function to convert Base64 to Uint8Array
+        function base64ToUint8Array(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes;
+        }
+
+        function renderPage(num) {
+            pageRendering = true;
+            log('Rendering page ' + num);
+            pdfDoc.getPage(num).then(page => {
+                const viewport = page.getViewport({ scale: scale });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+
+                const renderTask = page.render(renderContext);
+                renderTask.promise.then(() => {
+                    log('Page ' + num + ' rendered.');
+                    pageRendering = false;
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                });
+
+                viewer.innerHTML = '';
+                viewer.appendChild(canvas);
+                pageNumSpan.textContent = `Page ${num} of ${pdfDoc.numPages}`;
+            }).catch(err => {
+                log('Error rendering page ' + num + ': ' + err.message);
+            });
+        }
+
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        function onPrevPage() {
+            if (pageNum <= 1) return;
+            pageNum--;
+            queueRenderPage(pageNum);
+        }
+
+        function onNextPage() {
+            if (pageNum >= pdfDoc.numPages) return;
+            pageNum++;
+            queueRenderPage(pageNum);
+        }
+
+        prevButton.addEventListener('click', onPrevPage);
+        nextButton.addEventListener('click', onNextPage);
+
+document.addEventListener('message', function(event) {
+            log('Message received from React Native.');
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'LOAD_PDF') {
+                    const { base64, isPurchased } = data.payload;
+                    log('Received Base64 data of length: ' + (base64 ? base64.length : 0));
+                    
+                    try {
+                        log('Decoding Base64 string...');
+                        const pdfData = base64ToUint8Array(base64);
+                        log('Decoded to Uint8Array of length: ' + (pdfData ? pdfData.length : 0));
+
+                        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+
+                        loadingTask.promise.then(pdf => {
+                            log('PDF loaded successfully. Total pages: ' + pdf.numPages);
+                            pdfDoc = pdf;
+                            const totalPages = pdf.numPages;
+                            pdfDoc.numPages = isPurchased ? totalPages : Math.min(10, totalPages);
+                            log('Effective pages: ' + pdfDoc.numPages);
+                            renderPage(pageNum);
+                        }).catch(err => {
+                            log('Error loading PDF document: ' + err.message);
+                        });
+                    } catch (e) {
+                        log('Error during PDF loading task creation: ' + e.message);
+                    }
+                }
+            } catch (error) {
+                log('Error parsing message from React Native: ' + error.message);
+            }
+        });
+        
+        log('Event listener for "message" added.');
+    </script>
+</body>
+</html>
