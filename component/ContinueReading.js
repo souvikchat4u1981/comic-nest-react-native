@@ -42,7 +42,12 @@ function ContinueReading() {
         );
     }
 
+    if (!purchasedBooks || purchasedBooks.length === 0) {
+        return null;
+    }
+
     return (
+
         <View style={styles.outerContainer}>
             <View style={styles.titleContainer}>
                 <Text style={styles.title}>Continue Reading</Text>
@@ -58,6 +63,7 @@ function ContinueReading() {
                 />
             </View>
         </View>
+
     );
 }
 
@@ -65,6 +71,7 @@ export default ContinueReading;
 
 const styles = StyleSheet.create({
     outerContainer: {
+        flex: 1,
         height: 270,
         marginVertical: 10,
         width: '90%', // 90% width

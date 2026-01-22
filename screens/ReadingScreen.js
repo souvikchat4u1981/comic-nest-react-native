@@ -6,6 +6,7 @@ import {
     Image,
     useWindowDimensions,
     TouchableOpacity,
+    ActivityIndicator,
 } from 'react-native';
 
 import {
@@ -70,6 +71,7 @@ export default function ReadingScreen({ route }) {
     }
 
     const [pageIndex, setPageIndex] = useState(initialPage);
+    const [isLoading, setIsLoading] = useState(true);
     const flatListRef = useRef(null);
 
     /* ---------- Shared Values ---------- */
@@ -208,8 +210,16 @@ export default function ReadingScreen({ route }) {
                             imageStyle,
                         ]}
                         resizeMode="contain"
+                        onLoadStart={() => setIsLoading(true)}
+                        onLoadEnd={() => setIsLoading(false)}
                     />
                 </GestureDetector>
+
+                {isLoading && (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#FFFFFF" />
+                    </View>
+                )}
 
                 {/* ---------- NAVIGATION BUTTONS ---------- */}
                 <View style={styles.navContainer}>
@@ -239,6 +249,13 @@ const styles = StyleSheet.create({
         top: 20,
         left: 20,
         zIndex: 10,
+    },
+    loadingContainer: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        zIndex: 20,
     },
     navContainer: {
         position: 'absolute',
